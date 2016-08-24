@@ -1,0 +1,117 @@
+---
+title: "Seasonal Shipping Stressor Layers"
+author: "Jamie Afflerbach"
+date: "1/11/2016"
+output: html_document
+---
+
+```{r,echo=F}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+
+
+knitr::knit_hooks$set(htmlcap = function(before, options, envir) {
+  if(!before) {
+    paste('<p class="caption">',options$htmlcap,"</p>",sep="")
+    }
+    })
+
+source('common.R')
+
+```
+
+
+This script creates shipping raster layers for the stressor in the Ice and Ice Free Season.
+
+
+1. Read in pan-arctic shipping density files
+
+```{r}
+
+pan_ice = raster('stressors/shipping/working/ice_season_shipping.tif')%>%
+            mask(.,pan)%>%
+              crop(.,pan)
+pan_icef = raster('stressors/shipping/working/icefree_season_shipping.tif')%>%
+            mask(.,pan)%>%
+             crop(.,pan)
+
+
+plot(pan_ice,col=cols,main='Ice')
+plot(pan_icef,col=cols,main='Ice free')
+```
+
+
+2. Log transform
+
+```{r log}
+
+pan_ice_log = log(pan_ice)
+
+pan_icef_log = log(pan_icef)
+
+levelplot(bsr_log,par.settings=myTheme)
+
+```
+
+3. Rescale to 99.99th quantile
+
+Using the maximum value from the ice free season: `r quantile(pan_icef_log,probs=0.9999)`
+
+```{r rescale}
+
+ref = quantile(pan_icef_log,probs=.9999)
+ref
+
+pan_ice_resc = calc(pan_ice_log,fun=function(x){ifelse(x>ref,1,x/ref)})
+pan_icef_resc =calc(pan_icef_log,fun=function(x){ifelse(x>ref,1,x/ref)})
+
+```
+
+4. Clip to BSR
+
+```{r clip}
+
+bsr_ice = crop(pan_ice_resc,bsr)
+
+bsr_icef = crop(pan_icef_resc,bsr)
+
+```
+
+5. Set NAs to 0
+
+```{r zeroes}
+
+bsr_ice[is.na(bsr_ice)]<-0
+
+bsr_ice = mask(bsr_ice,bsr)
+
+bsr_icef[is.na(bsr_icef)]<-0
+
+bsr_icef = mask(bsr_icef,bsr)
+
+extent(bsr_ice)<-extent(bsr_icef)
+
+levelplot(stack(bsr_ice,bsr_icef),par.settings=myTheme)
+```
+
+
+6. Resample to same cell res as other layers
+
+```{r resample}
+
+#pick raster layer as template for resampling
+
+sst = raster('../seasonal_output/bsr_sst_ice_rescaled.tif')
+bsr_ice_out = resample(bsr_ice,sst,method='ngb')
+bsr_icef_out = resample(bsr_icef,sst,method='ngb')
+```
+
+7. Save rasters
+
+```{r save}
+
+writeRaster(bsr_ice_out,filename='../seasonal_output/shipping_ice.tif',overwrite=T)
+
+writeRaster(bsr_icef_out,filename='../seasonal_output/shipping_icefree.tif',overwrite=T)
+```
+
+

@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20151216</CreaDate><CreaTime>10522400</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\desktop10.3\ArcToolbox\Toolboxes\Spatial Analyst Tools.tbx\ExtractByMask" Date="20151216" Time="105224">ExtractByMask global_uv_ice_free_3572.tif C:\arctic\seasonal_stressors\fert_bsr_ice_season.tif C:\arctic\seasonal_stressors\clipping_test\bsr_uv_ice_free_3572.tif</Process></lineage></DataProperties></Esri></metadata>

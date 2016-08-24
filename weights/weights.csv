@@ -1,0 +1,14 @@
+,,Rocky Reef (Hard Shallow),Hard Shelf,Subtidal soft bottom (Soft Shallow),Soft Shelf,Surface waters,Deep waters,Beach,Salt Marsh,Rocky Intertidal,Intertidal Mud
+,,RR_ECO,HS_ECO,SBSB_ECO,SSHELF_ECO,SW_ECO,DW_ECO,BCH_ECO,SM_ECO,RI_ECO,IM_ECO
+Demersal Destructive Fishing,DDF_IMP,2.9,3.2,2.4,2.5,0,0,0,0,0,0
+Demersal nondest low bycatch,DND_LB_IMP,2.7,2.8,1.7,1.8,0,0,0,0,0,0
+Demersal nondest high bycatch,DND_HB_IMP,2.8,3.1,2.1,2.2,0,0,0,0,0,0
+Pelagic low bycatch,PLB_IMP,2.6,2.6,0.6,0.8,2.2,0.6,0,0,0,0
+Fertilizer,NI_IMP,1.7,1.7,1,1,1.4,0.5,1.9,3,2.3,1.9
+Pesticide,OP_IMP,1.5,1.5,0.8,0.8,1.2,0.3,1.7,2.8,2.1,1.7
+Marine plastic,MP_IMP,0.9,1,0.4,0.8,1,0.2,1.2,1.2,0.9,1
+Ocean acidification,OA_IMP,2.5,2.5,1.7,1.7,1.8,1.8,1,1.3,1.6,1
+Sea level rise,CC_SLR_IMP,0,0,0,0,0,0,2.1,3,2.8,3
+Shipping,CA_IMP,1.9,0.9,0.5,0.3,1,0,0,0,0,0
+SST,CC_SST_IMP,2.5,1.7,2,1.7,3.3,1.6,0.6,1.4,1.4,1.4
+UV,CC_UV_IMP,0.7,0,0.3,0,1.5,0,0,1.1,0.9,1.3

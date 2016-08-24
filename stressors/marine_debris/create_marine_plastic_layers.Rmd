@@ -1,0 +1,163 @@
+---
+title: "Create Marine Plastic Layer for the Arctic"
+author: "Jamie Afflerbach"
+date: "9/9/2015"
+output: html_document
+---
+
+#Setup
+
+```{r setup,warning=F,message=F}
+
+source('../../common.R')
+
+# plastics data
+count  = list.files(path='raw',pattern='count_*',full.names=T)
+weight = list.files(path='raw',pattern='weight_*',full.names=T)
+
+```
+***  
+
+###Step One: Unlog data
+
+Data came to us logged (using base 10 log) so need to unlog first
+
+
+```{r unlog, warning=F,message=F,eval=F}
+
+unlog = function(file){
+  
+  name = unlist(strsplit(file,'/','.'))[2] #split filename, grab second string to use in naming tif
+  r = raster(file)
+  out = 10^r
+  writeRaster(out,file=paste0('working/unlog_',name,sep=''),overwrite=T)
+  
+}
+
+sapply(count,unlog)
+sapply(weight,unlog)
+
+```
+***  
+
+
+###Step Two: stack all rasters within weight and count and sum across layers
+```{r stack, message=F, warning=F}
+
+weight = stack(list.files('working','unlog_weight_*',full.names=T))%>%
+          calc(.,fun=sum)
+count  = stack(list.files('working','unlog_count_*',full.names=T))%>%
+          calc(.,fun=sum)
+
+par(mfrow=c(1,2))
+
+plot(weight,col=cols,main='Weight')
+plot(count,col=cols,main='Count')
+```
+
+***  
+
+
+###Step Three: Reproject to mollweide 
+```{r,message=F,warning=F}
+projection(weight) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"    #define initial projection. Helps avoid errors when reprojecting to mollweide
+projection(count) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"  
+laeaCRS <- CRS("+init=epsg:3572")
+
+
+w_laea <- projectRaster(weight, crs=laeaCRS,filename='working/weight_sum.tif',overwrite=T)
+
+c_laea <- projectRaster(count, crs=laeaCRS,filename='working/count_sum.tif',overwrite=T)
+par(mfrow=c(1,2))
+plot(w_laea,col=cols,main='Weight')
+plot(c_laea, col=cols, main='Count')
+```
+
+***  
+
+###Step Four: Resample to 1km 
+```{r,message=F, warning=F}
+
+resamp_w   <- crop(w_laea,pan)%>%resample(.,pan_ocean,method='ngb')
+
+resamp_c   <- crop(c_laea,pan)%>%resample(.,pan_ocean,method='ngb')
+par(mfrow=c(1,2))
+plot(resamp_w,col=cols,main='Weight')
+plot(resamp_c,col=cols,main='Count')
+```
+
+***  
+
+###Step Five: Mask out ocean
+```{r,message=F,warning=F}
+
+count_mask = mask(resamp_c,pan_ocean,filename ='working/pan_count_sum_1km_.tif',overwrite=T)
+weight_mask = mask(resamp_w,pan_ocean,filename='working/pan_weight_sum_1km.tif',overwrite=T)
+
+par(mfrow=c(1,2))
+plot(count_mask,col=cols,main='Count density (pieces/km2)')
+plot(weight_mask,col=cols,main='Weight density (g/km2)')
+
+```  
+
+***  
+
+###Step Six: Rescale by log transforming raw data and normalize to the 99.99th quantile
+```{r,warning=F,message=F}
+
+# log transform
+
+w_log = calc(weight_mask,fun=function(x){log(x+1)},filename='working/pan_weight_sum_1km_log.tif',overwrite=T)
+c_log = calc(count_mask,fun=function(x){log(x+1)},filename='working/pan_count_sum_1km_log.tif',overwrite=T)
+
+par(mfrow=c(1,2))
+plot(w_log,col=cols,main='Weight density\nlog(g/km2)')
+plot(c_log,col=cols,main='Count density\nlog(pieces/km2)')
+
+#  Get 99.99th quantile
+
+w_ref = quantile(w_log,prob=0.9999)
+c_ref = quantile(c_log,prob=0.9999)
+
+histogram(w_log,main='Weight density (log(g/km2))')
+histogram(c_log,main='Count density (log(pieces/km2))')
+
+# rescale to 99.99th quantile for pan-arctic
+
+w_rescale = calc(w_log,fun=function(x){ifelse(x>w_ref,1,x/w_ref)},filename='output/weight_rescale_panarctic.tif',overwrite=T)
+
+c_rescale = calc(c_log,fun=function(x){ifelse(x>c_ref,1,x/c_ref)},filename='output/count_rescale_panarctic.tif',overwrite=T)
+
+par(mfrow=c(1,2))
+plot(w_rescale,main='Pressure layer: weight density (g/km2)',col=cols)
+plot(c_rescale,main='Pressure layer: count density (pieces/km2)',col=cols)
+
+```
+
+***  
+
+###Step Seven: Clip to the Bering Strait Region
+```{r,message=F,warning=F}
+
+bsr_w = crop(w_rescale,bsr)%>%mask(.,bsr_ocean,filename='output/weight_bsr.tif',overwrite=T)
+bsr_c = crop(c_rescale,bsr)%>%mask(.,bsr_ocean,filename='output/count_bsr.tif',overwrite=T)
+
+par(mfrow=c(1,2))
+plot(bsr_w,col=cols,main='Weight')
+plot(bsr_c,col=cols,main='Count')
+```
+***  
+
+
+###Step Eight: Compare count vs weight
+```{r,message=F,warning=F}
+# This provides some general statistics and visualizations:
+compare <- stack(w_rescale, c_rescale) 
+pairs(compare)    
+
+## Here is a scatter plot comparison:
+plot(w_rescale, c_rescale, ylab="Count", xlab="Weight", maxpixels=10000000, col=rgb(0,0,0,0.2))   
+
+```
+
+

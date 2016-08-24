@@ -1,0 +1,137 @@
+---
+title: "Create Demersal Non-Destructive Low Bycatch Layer for the Bering Strait Region"
+author: "Jamie Afflerbach"
+output: html_document
+---
+```{r setup, warning=F,message=F}
+
+source('../../common.R')
+
+# Libraries
+
+library(tidyr)
+library(reshape2)
+library(rgeos)
+```
+
+##Bring in the demersal non-destructive fishing layer that has been updated for the Russian side.
+```{r, warning=F,message=F}
+
+    dem_nd_lb_rus = raster('working/dem_nd_lb_rus_catch.tif')
+    
+    plot(dem_nd_lb_rus,col=cols, main='Demersal Nondestructive Catch in Russia')
+```
+
+##Update US EEZ with data from crab fishery  
+
+On the US side, there is non-destructive low bycatch fishing for crab.
+```{r US to zero, message=F,warning=F}
+    
+   
+raw = read.csv('raw/BIT.csv',stringsAsFactors=F)
+
+
+#locations in our BSR region
+
+data = raw%>%
+        filter(Year>2008,Total.Pounds>0)%>%
+         select(Fishery, Fishery.Description,Year, Total.Pounds)%>%
+          separate(Fishery.Description,c("Species","Gear","Location"),", ",extra='merge')
+           data$Total.Pounds = as.numeric(gsub(',','',data$Total.Pounds))         
+
+
+#crab in norton sound
+crab = data%>%
+  filter(grepl('CRAB',Species))%>%
+      filter(grepl('NORTON SOUND',Location))
+
+crab_avg = mean(crab$Total.Pounds)
+
+# pounds to tons
+
+crab_tons = crab_avg*0.000453592 #this is the multiplier for pounds to metric tons
+
+
+# based on: http://www.cfec.state.ak.us/bit/mnucrab.htm and the fishing codes found here: http://www.cfec.state.ak.us/spcs/MENUS.htm
+# these are all pots
+
+```
+
+
+```{r,message=F,warning=F}
+
+# USA EEZ shapefile
+us_eez <- readOGR(dsn=file.path(dir_arctic,'gis/bsr'),layer='USA_EEZ')
+
+# Bring in shapefiles for each of the 3 management areas
+crab   <- readOGR(dsn=file.path(dir_arctic,'stressors/commercial_fisheries/gis'),layer='BSR_AK_crab_areas_laea_US_EEZ_clip',verbose=F)
+
+plot(bsr, main='Crab fishing area')
+plot(crab,add=T,col='blue')
+
+crab_ras = rasterize(crab,bsr_ocean,1)
+n_cells = cellStats(crab_ras,stat='sum')#151324
+
+catch_km = crab_tons/n_cells
+
+```
+
+Total average catch in this region is `r crab_tons` tons.
+
+
+```{r, message=F,warning=F}
+
+#want to replace values in these US crab areas with catch rate
+
+    # first turn all us eez values to 0, this will help keep 0 where the closed areas are
+    dem_nd_crab_1 = rasterize(us_eez,dem_nd_lb_rus,0,update=TRUE,progress='text')
+
+    # now update the crab fishing area with catch rate per km2
+    dem_nd_crab_2 = rasterize(crab,dem_nd_crab_1,catch_km,update=TRUE,progress='text')
+
+```  
+
+***  
+
+##Bring in productivity
+
+```{r,message=F,warning=F}
+    
+  prod = raster('../productivity/output/five_yr_avg_09-13_bsr_laea.tif')
+
+  plot(prod,col=cols, 'Productivity')
+    
+```
+
+Catch needs to be standardized by productivity
+```{r,message=F,warning=F}
+
+  catch_prod = dem_nd_crab_2/prod
+
+  plot(catch_prod,col=cols, main = 'Catch standardize by productivity')
+  
+  histogram(catch_prod)
+  
+```  
+
+***  
+
+##Rescale
+
+```{r rescale,message=F,warning=F}
+  
+max = cellStats(catch_prod,stat='max')
+
+dem_nd_rescale = catch_prod/max
+
+dem_nd_rescale[is.na(dem_nd_rescale)]<-0
+
+dem_nd_layer = mask(dem_nd_rescale,bsr)
+
+plot(dem_nd_layer,main='Demersal destructive bycatch fishing rescaled',col=cols)
+plot(bsr,add=T)
+
+
+writeRaster(dem_nd_layer,filename='output/dem_nd_lb_bsr_catch_prod(5yravg).tif',overwrite=T)
+
+```

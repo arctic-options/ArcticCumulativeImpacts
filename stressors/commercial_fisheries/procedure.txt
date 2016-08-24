@@ -1,0 +1,32 @@
+
+
+Update: 1/6/2015
+
+After email correspondance with Josh Keaton from NOAA in Alaska, it is clear that there is no trawling (bottom or mid-water) in our region. In addition, there are no groundfish fisheries. The only fisheries that exist in this region are crab and salmon fisheries. 
+
+Both Crab and Salmon fisheries are regulated by the state of Alaska (Alaska Department of Fish and Game). 
+
+Salmon fisheries are limited to state waters but crab fisheries are not.
+
+Changes to US EEZ fishing:
+
+- no demersal destructive fishing
+- no demersal non-destructive, high bycatch fishing
+- no pelagic, high bycatch fishing
+- no pelagic, lowbycatch fishing in federal waters (salmon fisheries in state waters)
+- there is demersal, non-destructive, lowbycatch fishing in federal and state waters (Crab)
+
+Update RUS EEZ fishing:
+- there is no better Russian EEZ fisheries data, so I have kept same values from Global 2013 (using the fishprod data layer which is the catch rate/productivity). 
+
+Rescaling after updating US EEZ values
+
+
+CLIPPING CHI 2013 LAYERS
+
+For each commercial fisheries layer, the layer used in 2013 cumulative impact analyses was clipped manually in ArcGIS to the bering_boundaries_shoreline_lea polygon - checked box 'Use Input Features for Clipping Geometry'
+
+These original data layers are found: H:\mnt\storage\marine_threats\impact_layers_2013_redo\impact_layers\final_impact_layers\threats_2013_interim\new_layers.
+
+the clipped layers are saved in 'A:\HIACMS\CHI\bering-strait\stressors\commercial_fisheries\working'
+

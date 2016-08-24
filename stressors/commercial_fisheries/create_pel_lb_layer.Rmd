@@ -1,0 +1,158 @@
+---
+title: "Create Pelagic Low Bycatch Layer for the Bering Strait Region"
+author: "Jamie Afflerbach"
+date: "9/24/2015"
+output: html_document
+---
+```{r setup, warning=F,message=F}
+
+invisible(source('../../common.R'))
+
+# Libraries
+
+library(tidyr)
+library(reshape2)
+library(rgeos)
+```
+
+On the US side of the BSR, catch data for our region for the years 2009-2013 comes from the Alaska Commercial Fisheries Entry (CFEC). All salmon fishing in our region uses set gillnet and has low bycatch and can therefore be categorized as pelagic, low bycatch fishing.
+
+**Read in AK fisheries data**
+```{r AK data,message=F,warning=F}
+
+raw = read.csv('raw/BIT.csv',stringsAsFactors=F)
+```
+
+**Filter data to select three towns in our region, Kotzebue, Norton Sound and Lower Yukon and for all years 2009-2013.
+
+```{r,message=F,warning=F}
+#locations in our BSR region. Filter raw dataset to select just these locations
+
+bsr_towns = c("KOTZEBUE","NORTON SOUND","LOWER YUKON")
+
+data = raw%>%
+        filter(Year>2008,Total.Pounds>0)%>% #select all years 2009-2013
+         select(Fishery, Fishery.Description,Year, Total.Pounds)%>%
+          separate(Fishery.Description,c("Species","Gear","Location"),", ",extra='merge')
+
+data$Total.Pounds = as.numeric(gsub(',','',data$Total.Pounds))         
+
+salmon = data%>%
+          filter(Species=='SALMON',
+                 Location %in% bsr_towns)%>%
+            group_by(Location)%>%
+             summarise(avg_catch = mean(Total.Pounds)*0.000453592)%>% #pounds to tons
+              as.data.frame()
+
+print(salmon)
+```
+Based on [this description](http://www.cfec.state.ak.us/bit/MNUSALM.htm) and the fishing codes found [here](http://www.cfec.state.ak.us/spcs/MENUS.htm), the fishing gear used are set gillnets, not drift
+      
+
+
+**Bring in shapefiles for each of the 3 management areas**
+```{r,warning=F,message=F}
+
+us_eez <- readOGR(dsn=file.path(dir_arctic,'gis/bsr'),layer='USA_EEZ',verbose=F)
+
+
+salm <- readOGR(dsn=file.path(dir_arctic,'stressors/commercial_fisheries/gis'),layer='BSR_AK_salmon_areas',verbose=F)
+salm <- spTransform(salm,laeaCRS)
+plot(us_eez)
+plot(salm,add=T,col='blue')
+```
+
+Get number of cells in each polygon so we can calculate catch per cell
+```{r,warning=F,message=F}
+
+salm@data$location = c('KOTZEBUE','NORTON SOUND','LOWER YUKON')
+salm@data$catch = salmon$avg_catch[match(salm@data$location,salmon$Location)]
+
+salm_zones = rasterize(salm,bsr_ocean)
+plot(salm_zones,col=cols) #r automatically assigns values to each region. Kotzebue = 1, Norton Sound = 2 and Lower Yukon = 3
+
+salm_ras = rasterize(salm,bsr_ocean,1)
+plot(salm_ras)
+
+# to get total area for each, run zonal
+
+z = zonal(salm_ras,salm_zones,sum)
+z
+
+salm@data$n_cells = c(857, 4078, 7564)
+salm@data$catch_per_cell = salm@data$catch/salm@data$n_cells
+
+print(salm@data)
+```
+
+***  
+
+Bring in the russian catch raster for pelagic low bycatch  
+```{r, warning=F,message=F}
+
+  pel_lb_rus = raster('working/pel_lb_rus_catch.tif')
+  plot(pel_lb_rus,col=cols,main='Catch per cell (tons) updated with SAUP data')
+```
+
+Then replace values within US waters with catch per cell calculated for salmon  
+```{r, message=F, warning=F}
+  
+# first turn all US EEZ values to 0, this will help keep 0 where there isn't fishing
+
+    pel_lb_US = rasterize(us_eez,pel_lb_rus,0,update=TRUE)
+    plot(pel_lb_US,col=cols, main='US EEZ catch set to 0')
+    
+# now update the salmon fishing area with catch rate per km2
+    pel_lb_bsr = rasterize(salm,pel_lb_US,field=salm@data$catch_per_cell,update=TRUE,
+                            filename='working/pel_lb_catch.tif',overwrite=T)
+    
+    pel_lb_bsr[is.na(pel_lb_bsr)]<-0
+    
+    pel_lb_bsr = mask(pel_lb_bsr,bsr)
+    
+    plot(pel_lb_bsr,col=cols,main='Pelagic Low Bycatch \nCatch per cell for BSR')
+    plot(bsr,add=T)
+    plot(us_eez,add=T)
+```
+
+
+*** 
+
+Bring in productivity
+
+```{r,message=F,warning=F}
+    
+  prod = raster('../productivity/output/five_yr_avg_09-13_bsr_laea.tif')
+
+  plot(prod,col=cols)
+    
+```
+
+Catch needs to be standardized by productivity
+```{r,message=F,warning=F}
+
+  catch_prod = pel_lb_bsr/prod
+
+  plot(catch_prod,col=cols, main = 'Catch standardized by productivity')
+  
+  histogram(catch_prod)
+  
+```  
+***  
+
+Rescale
+
+```{r rescale,message=F,warning=F}
+  
+max = cellStats(catch_prod,stat='max')
+
+pel_lb_rescale_max = catch_prod/max
+
+
+plot(pel_lb_rescale_max,col=cols,main='Pelagic low bycatch fishing rescaled')
+plot(bsr,add=T)
+
+
+writeRaster(pel_lb_rescale_max,filename='output/pel_lb_bsr_catch_prod(5yravg).tif',overwrite=T)
+
+```

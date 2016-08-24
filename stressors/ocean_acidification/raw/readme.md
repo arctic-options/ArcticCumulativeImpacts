@@ -1,0 +1,1 @@
+Raw Ocean Acidification data is stored on the NCEAS server. The data was provided by Ivan Lima from Woods Hole Oceanographic Institute. The data comes as NetCDF files and is an extension of the data modeled for [Feely et al. (2009)](http://www.tos.org/oceanography/archive/22-4_feely.pdf)

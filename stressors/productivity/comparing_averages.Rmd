@@ -1,0 +1,92 @@
+---
+title: "Exploring primary productivity data"
+author: "Jamie Afflerbach"
+date: "2/18/2015"
+output: html_document
+---
+
+Looking at [VGPM data](http://orca.science.oregonstate.edu/1080.by.2160.monthly.hdf.vgpm.m.chl.m.sst4.php) to determine how best to use the data for global analysis.   
+
+Previously, primary productivity data was used to standardize global catch rates per fishing gear type. This helps calculate the impact of fishing by taking into account the amount of fish caught, and the productivity of the water it was caught in. As an example, 100 tons of fish caught in a very productive area would have a lower impact than 100 tons of fish caught in an area with low productivity.  
+
+----  
+```{r,warning=FALSE,message=FALSE, echo=FALSE}
+library(raster)
+library(rasterVis)
+library(RColorBrewer)
+
+cols = rev(colorRampPalette(brewer.pal(11, 'Spectral'))(255)) # rainbow color scheme
+
+dir_arctic = c('Windows' = '//jupiter.nceas.ucsb.edu/arctic',
+               'Darwin'  = '/Volumes/arctic',
+               'Linux'   = '/data/shares/arctic')[[ Sys.info()[['sysname']] ]]
+
+# set tmp directory
+tmpdir=file.path(dir_arctic,'home_big/R_raster_tmp')
+dir.create(tmpdir, showWarnings=F)
+rasterOptions(tmpdir=tmpdir)
+
+# set working directory
+
+setwd(file.path(dir_arctic, 'HIACMS/CHI/bering-strait/stressors/productivity'))
+
+mytheme=rasterTheme(region=cols)
+```
+
+Data was downloaded for years 2009-2013 and came as monthly snapshots of global productivity in mg C/m2/day.  
+
+**Example of raw data from April 2013**
+
+```{r, message=FALSE,warning=FALSE,echo=FALSE}
+# get files for a year
+
+yr    <- 2013
+files <- list.files(path='working/rasterized_rawdata',pattern=paste(yr,"\\.tif$",sep=''),full.names=TRUE,recursive=TRUE)
+
+r <- raster(files[1])
+levelplot(r,par.settings=mytheme,main='Net Primary Productivity for April 2013 \n(mg C/m2/day)',margin=FALSE) 
+```
+  
+  
+ ----- 
+
+###Annual averages  
+
+```{r,echo=FALSE}
+# get the average 
+
+annual = list.files(path='outputs',full.names=TRUE,recursive=TRUE) [1:5]
+
+r_annual = stack(annual)
+
+levelplot(r_annual,par.settings=mytheme,main = "Annual Primary Production (mg C/m2/day)\n from 2009 to 2013",margin=FALSE)
+
+histogram(r_annual,main = "Annual Primary Production (mg C/m2/day)\n from 2009 to 2013")
+```
+  
+  -----
+
+###Three year averages
+```{r,echo=FALSE}
+# look at 3 year averages
+
+files = list.files(path='outputs',full.names=TRUE,recursive=TRUE)[7:9]
+
+s = stack(files)
+
+levelplot(s,par.settings=mytheme,main = "Three year average Primary Production (mg C/m2/day)\n from 2009 to 2013",margin=FALSE)
+
+histogram(s,main = "Three year average Primary Production (mg C/m2/day)\n from 2009 to 2013")
+```
+
+-----
+
+###Five year average
+```{r,echo=FALSE}
+file = list.files(path='outputs',full.names=TRUE,recursive=TRUE)[6]
+
+r<-raster(file)
+
+levelplot(r,par.settings=mytheme,margin=FALSE, main = 'Average primary productivity from 2009-2013\n(mg C/m2/day)')
+histogram(r,main='Average primary productivity from 2009-2013\n(mg C/m2/day)')
+```

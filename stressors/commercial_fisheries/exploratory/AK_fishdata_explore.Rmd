@@ -1,0 +1,79 @@
+---
+title: "Alaska Fisheries Data Exploration"
+author: "Jamie Afflerbach"
+date: "Friday, December 05, 2014"
+output: html_document
+---
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+library(reshape2)
+library(ggplot2)
+library(scales)
+library(magrittr)
+library(dplyr)
+
+```
+```{r}
+#Read in data
+
+catch_514 = read.csv('A:/HIACMS/CHI/bering-strait/stressors/commerical fisheries/inputs/LANDINGS_REGION_514.csv',stringsAsFactors=F)%>%
+             mutate(ROUND_WEIGHT_MTONS = as.numeric(sub(",","",ROUND_WEIGHT_MTONS,fixed=TRUE)),
+                    AKFIN_YEAR = as.numeric(AKFIN_YEAR)) #there are commas in the data which force those values to be read as characters.
+
+catch_524 = read.csv('A:/HIACMS/CHI/bering-strait/stressors/commerical fisheries/inputs/LANDINGS_REGION_524.csv',stringsAsFactors=F)%>%
+             mutate(ROUND_WEIGHT_MTONS = as.numeric(sub(",","",ROUND_WEIGHT_MTONS,fixed=TRUE))) #there are commas in the data which force those values to be read as characters.
+
+head(catch_514)
+head(catch_524)
+```
+  
+Data are for two NOAA reporting areas that fall in our region. Reporting area 400 was not included due to confidentiality issues (too few vessels reporting in the region)  
+  
+![alt text](http://alaskafisheries.noaa.gov/maps/images/nmfs_reporting_areas.gif)  
+  
+  
+###GEAR  
+
+**Data for area 514**
+```{r}
+#get data in format to plot
+dat_514 = catch_514%>%
+            group_by(FMP_GEAR,AKFIN_YEAR)%>%
+             summarise(CATCH = sum(ROUND_WEIGHT_MTONS))
+
+#plot
+ggplot(dat_514,aes(x=AKFIN_YEAR,y=CATCH,fill=FMP_GEAR))+geom_bar(stat='identity') +scale_y_continuous(labels=comma)
+
+```
+
+  
+**Data for area 524**
+```{r}
+#get data in format to plot
+dat_524 = catch_524%>%
+            group_by(FMP_GEAR,AKFIN_YEAR)%>%
+             summarise(CATCH = sum(ROUND_WEIGHT_MTONS))
+#plot
+ggplot(dat_524,aes(x=AKFIN_YEAR,y=CATCH,fill=FMP_GEAR))+geom_bar(stat='identity') 
+```
+
+###Species  
+
+**Data for area 514**
+```{r}
+sp_514 = catch_514%>%
+        group_by(SPECIES,AKFIN_YEAR)%>%
+        summarise(CATCH = sum(ROUND_WEIGHT_MTONS))
+      
+#plot
+ggplot(sp_514,aes(x=AKFIN_YEAR,y=CATCH,fill=SPECIES))+geom_bar(stat='identity')  +scale_y_continuous(labels=comma)
+```
+
+**Data for area 524**
+```{r}
+sp_524 = catch_524%>%
+          group_by(SPECIES,AKFIN_YEAR)%>%
+           summarise(CATCH = sum(ROUND_WEIGHT_MTONS))
+
+ggplot(sp_524,aes(x=AKFIN_YEAR,y=CATCH,fill=SPECIES))+geom_bar(stat='identity')  +scale_y_continuous(labels=comma)
+```

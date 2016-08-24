@@ -1,0 +1,140 @@
+---
+title: "Create Demersal Non-Destructive High Bycatch Layer for the Bering Strait Region"
+author: "Jamie Afflerbach"
+output: html_document
+---
+```{r setup, warning=F,message=F}
+
+source('../../common.R')
+
+# Libraries
+
+library(tidyr)
+library(reshape2)
+library(rgeos)
+```
+
+##Bring in the demersal non-destructive fishing layer that has been updated for the Russian side.
+```{r, warning=F,message=F}
+
+    dem_nd_hb_rus = raster('working/dem_nd_hb_rus_catch.tif')
+    
+    plot(dem_nd_hb_rus,col=cols, main='Demersal Nondestructive High bycatch in Russia')
+```
+
+##Update US EEZ with halibut fishery data from IPHC
+
+
+```{r halibut data, message=F,warning=F}
+
+
+# IPHC statistical areas
+
+    iphc = readOGR(dsn=file.path(dir_arctic,'stressors/commercial_fisheries/gis/IPHC_BeringSea'),layer='BS_Den_laea_bsr') #area is in km2
+    iphc_us= readOGR(dsn=file.path(dir_arctic,'stressors/commercial_fisheries/gis/IPHC_BeringSea'),layer='BS_Den_laea_useez')  #clipped 4D to us eez in arcgis. Since we
+#                                                                                                             are assuming halibut statistics for russian side is accounted
+                                                                                                            # for in FAO statistics, just want to update US side
+    iphc_4D = iphc_us[iphc_us$REG_AREA=='4D',]
+    iphc_4E = iphc_us[iphc_us$REG_AREA=='4E',]
+    
+    plot(iphc_4D,main='IPHC Statistical Areas')
+    plot(iphc_4E, add=T)
+```
+
+IPHC filter data for years 2008-2013
+```{r, message=F,warning=F}
+    hal = read.csv('raw/IPHC_data_4D_4E.csv',stringsAsFactors=F,nrows=35,strip.white=TRUE)%>%
+                filter(Year > 2007)%>%
+                 select(Year,reg_area = Regulatory.Area,pounds = Net.wt..lb.)
+
+    hal$pounds = as.numeric(gsub(",","",hal$pounds))
+
+   
+
+    hal_4D_area= iphc@data%>%
+                  filter(REG_AREA=='4D')%>%
+                   summarise(sum(area))%>%
+                    as.numeric()
+
+
+    hal_4E_area = iphc@data%>%
+                   filter(REG_AREA=='4E')%>%
+                    summarise(sum(area))%>%
+                     as.numeric()
+```
+
+Calculate catch per cell
+```{r, message=F, warning=F}
+
+#getting tons/km2 for regulatory area 4D
+    hal_4D = hal%>%
+              filter(reg_area=='4D')%>%
+               summarise(mean(pounds))%>%
+                as.numeric()*0.000453592 #pounds to tons
+    
+    hal_4D_ras = rasterize(iphc_4D,bsr_ocean,1)
+    n_cells = cellStats(hal_4D_ras,sum)
+    catch_per_cell_4D = hal_4D/n_cells
+    
+    dem_nd_hb = rasterize(iphc_4D,dem_nd_hb_rus,catch_per_cell_4D,update=T)
+
+
+#getting tons/km2 for regulatory area 4E
+    hal_4E = hal%>%
+              filter(reg_area=='4E')%>%
+               summarise(mean(pounds))%>%
+                as.numeric()*0.000453592 #pounds to tons
+
+   hal_4E_ras = rasterize(iphc_4E,bsr_ocean,1)
+    n_cells = cellStats(hal_4E_ras,sum)
+  catch_per_cell_4E = hal_4E/n_cells
+
+  dem_nd_hb_bsr = rasterize(iphc_4E,dem_nd_hb,catch_per_cell_4E,update=T)
+  
+  dem_nd_hb_bsr[is.na(dem_nd_hb_bsr)]<-0
+  dem_nd_hb_bsr = mask(dem_nd_hb_bsr,bsr)
+  plot(dem_nd_hb_bsr,col=cols,main='Demersal nondestructive low bycatcatch per cell')
+
+
+```
+
+***  
+
+##Bring in productivity
+
+```{r,message=F,warning=F}
+    
+  prod = raster('../productivity/output/five_yr_avg_09-13_bsr_laea.tif')
+
+  plot(prod,col=cols, 'Productivity')
+    
+```
+
+Catch needs to be standardized by productivity
+```{r,message=F,warning=F}
+
+  catch_prod = dem_nd_hb_bsr/prod
+
+  plot(catch_prod,col=cols, main = 'Catch standardized by productivity')
+  
+  histogram(catch_prod)
+  
+```  
+
+***  
+
+##Rescale
+
+```{r rescale,message=F,warning=F}
+  
+max = cellStats(catch_prod,stat='max')
+
+dem_nd_rescale = catch_prod/max
+
+plot(dem_nd_rescale,main='Demersal nondestructive high bycatch fishing rescaled',col=cols)
+plot(bsr,add=T)
+
+
+writeRaster(dem_nd_rescale,filename='output/dem_nd_hb_bsr_catch_prod(5yravg).tif',overwrite=T)
+
+```

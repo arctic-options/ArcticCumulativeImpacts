@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20151214</CreaDate><CreaTime>11213700</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\desktop10.3\ArcToolbox\Toolboxes\Spatial Analyst Tools.tbx\RasterCalculator" Date="20151214" Time="112137">RasterCalculator "all_years_icefree_perc_noice.tif"*"bsr_uv_anomaly_diff_1km_resc.tif" C:\arctic\seasonal\uv_ice_free_season.tif</Process></lineage></DataProperties></Esri></metadata>

@@ -1,0 +1,13 @@
+key,layer
+DDF,Demersal destructive fishing
+DND_HB,Demersal nondestructive highbycatch fishing
+DND_LB,Demersal nondestructive lowbycatch fishing
+NI,Nutrient input
+OP,Organic pollution
+OA,Ocean acidification
+PLB,Pelagic lowbycatch fishing
+CA,Shipping
+CC_SST,Sea Surface Temperature
+CC_UV,Ultraviolet radiation
+CC_SLR,Sea Level Rise
+MP,Marine Plastics

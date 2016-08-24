@@ -1,0 +1,85 @@
+---
+title: "Getting proportion of catch by gear for BSR"
+author: "Jamie Afflerbach"
+date: "9/29/2015"
+output: html_document
+---
+
+Using the raw catch by gear type data from SAU shared in 2008, this script crops, reprojects, resamples and also calculates the total catch proportion by gear type per cell. 
+
+```{r read in data,warning=F,message=F}
+
+source('../../common.R')
+
+files = list.files(file.path(dir_arctic,'stressors/commercial_fisheries/raw/catch_by_gear'),full.names=T,pattern='.tif')
+
+```
+
+Create function
+
+```{r, message=F,warning=F}
+
+
+ras_fun <- function(file){
+  
+  name = substr(file,87,nchar(file)-8)
+  
+  r <- raster(file)%>%
+        projectRaster(crs=laeaCRS)%>%
+          crop(bsr)%>%
+            resample(bsr_ocean,method='ngb')%>%
+              mask(bsr)
+  
+  writeRaster(r,filename=paste0('working/',name,'_raw_bsr.tif'),overwrite=T)
+  
+}
+
+invisible(lapply(files,ras_fun))
+
+
+```
+
+Calculate total catch proportion
+
+```{r, message=F,warning=F}
+
+all = list.files('working',pattern='_raw_bsr.tif',full.names=T)
+
+plot(stack(all))
+
+r = stack(all)%>%
+      calc(.,fun=sum)
+
+
+# For each type of gear, we need to get proportion
+
+prop <- function(file){
+  
+  name = substr(file,9,nchar(file)-4)
+  
+  r_prop = raster(file)%>%
+            overlay(.,r,fun=function(x,y){x/y})
+  
+  r_prop[is.na(r_prop)]<-0
+  
+  r_prop = mask(r_prop,bsr)
+
+  writeRaster(r_prop,filename=paste0('working/',name,'_prop.tif'),overwrite=T)
+
+}
+
+invisible(lapply(all,prop))
+```
+
+Check that in total it adds to 1
+
+```{r check,message=F,warning=F}
+
+check = list.files('working',pattern='_bsr_prop.tif',full.names=T)
+
+all = stack(check)%>%calc(sum,na.rm=T)
+
+plot(all)
+```
+
+

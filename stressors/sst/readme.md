@@ -1,0 +1,1 @@
+Raw SST data kept on Aurora due to file sizes

@@ -1,0 +1,160 @@
+---
+title: "Exploring SAUP LME 54 data"
+author: "Jamie Afflerbach"
+date: "9/24/2015"
+output: html_document
+---
+
+Exploring data for [LME 54 from the SAUP](http://www.seaaroundus.org/data/#/lme/54?chart=catch-chart&dimension=taxon&measure=tonnage&limit=10). 
+
+**Data details**  
+- Sent to Ben from Dirk Zeller on September 15, 2015.  
+- Data includes all years 1950-2010  
+- Catch in tons by sector, taxon, country, reporting status (reported/unreported) and catch type (landings/discards)  
+
+```{r setup, warning=F, message=F}
+source('../../common.R')
+library(ggplot2)
+```
+
+Read in data  
+```{r data, echo=FALSE}
+raw = read.csv(file.path(dir_arctic,'stressors/commercial_fisheries/raw/SAUP/LME54_DataVersion40-Setp-14-2015.csv'))
+
+# we are really only interested in maybe the last ten years so lets go back to 2000.
+
+data = raw%>%filter(Year>1999)
+```
+
+Summary of data  
+
+```{r summary}
+
+length(unique(data$TaxonName))
+
+```
+
+
+Look at catch over time by Country   
+
+```{r,message=F,warning=F}
+
+country = ggplot(data,aes(Year,CatchAmount,fill=EEZName))+geom_bar(stat='identity')
+
+print(country)
+
+```
+
+Look at catch over time by sector  
+```{r,message=F,warning=F}
+
+sec = data%>%
+        group_by(Sector,Year,EEZName)%>%
+          summarize(catch = sum(CatchAmount))
+
+sector = ggplot(sec,aes(Year,catch,fill=Sector))+geom_bar(stat='identity')+facet_wrap(~EEZName)
+
+print(sector)
+
+```
+
+Since catch is reported by these 4 reporting regions, we can eliminate the US catch data since we have used better data to update that region. Using just the two Russian polygons we get a sense for how much catch comes out of the BSR on that side.  
+
+```{r russia}
+
+rus_FE = data%>%
+          filter(EEZName == 'Russia (Far East)')
+
+rus_LC=  data%>%
+          filter(EEZName == 'Russia (Laptev to Chukchi Sea)')
+
+length(unique(rus_FE$TaxonName)) #69 unique species in the far east
+length(unique(rus_LC$TaxonName)) #only 5 unique species in the chukchi sea
+```
+
+Looking just at the chukchi sea portion of the region  
+
+```{r Russia Chukchi}
+
+sp = ggplot(rus_LC,aes(Year,CatchAmount,fill=CommonName))+geom_bar(stat='identity')
+print(sp)
+
+rus_LC_sec = rus_LC%>%
+              group_by(Sector,Year,TaxonName)%>%
+              summarize(catch = sum(CatchAmount))
+
+unique(rus_LC_sec$Sector)
+```
+
+There is ONLY subsistence fishing in the Chukchi Sea region...  
+
+***  
+
+**Looking at the Far East portion**  
+
+```{r Russia far East}
+
+rus_FE_sec = rus_FE%>%
+              group_by(Sector,Year,TaxonName,CommonName)%>%
+                summarize(catch=sum(CatchAmount))
+
+unique(rus_FE_sec$Sector)
+
+sec = ggplot(rus_FE_sec,aes(Year,catch,fill=Sector))+geom_bar(stat='identity')
+print(sec)
+
+sec = ggplot(rus_FE_sec,aes(Year,catch,fill=CommonName))+geom_bar(stat='identity')+facet_wrap(~Sector)
+print(sec)
+
+s = rus_FE%>%
+        group_by(Sector)%>%
+         summarize(catch=sum(CatchAmount))
+s
+
+```
+
+
+Focusing on industrial catch and compare it to the total catch we are using now...
+
+```{r commercial catch}
+
+comm = rus_FE%>%
+        filter(Sector=='Industrial')
+
+comm_yr_catch = comm%>% group_by(Year)%>%
+            summarize(catch=sum(CatchAmount))
+
+length(unique(comm$TaxonName)) #67 species caught
+
+catch_time = ggplot(comm_yr_catch,aes(Year,catch))+geom_line(stat='identity')
+print(catch_time)
+
+unique(comm$CommonName)
+
+```
+
+TOP 20 SPECIES CAUGHT BY TONS
+```{r top 20,message=F,warning=F}
+
+top20 = comm%>%
+          group_by(CommonName)%>%
+            summarize(catch=sum(CatchAmount))%>%
+            top_n(20)
+        
+top20
+
+top20_plot = ggplot(top20,aes(CommonName,catch))+geom_bar(stat='identity')+
+  theme(axis.text.x=element_text(angle=45,hjust=1,vjust=1))
+print(top20_plot)
+
+#Remove pollock
+
+noPollock = top20%>%filter(catch<max(top20$catch))
+
+noP = ggplot(noPollock,aes(CommonName,catch))+geom_bar(stat='identity')+
+  theme(axis.text.x=element_text(angle=45,hjust=1,vjust=1))
+print(noP)
+
+```
+
+Since I don't know how these species are caught, we can do waht we did for OHI 2015. We can calculate the proportion of catch each cell has for each gear type. Then apply that proportion to the total tonnage for the region. 

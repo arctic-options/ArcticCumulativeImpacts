@@ -1,0 +1,122 @@
+---
+title: "Sea Level Rise for the Bering Strait"
+author: "Jamie Afflerbach"
+output: html_document
+---
+
+
+## Methods for creating the Sea Level Rise stressor data for Arctic Options
+
+Data comes from [Prandi et al. (2012)](http://www.tandfonline.com/doi/abs/10.1080/01490419.2012.718222#.VfiivJ1Viko) A New Estimation of Mean Sea Level in the Arctic Ocean from Satellite Altimetry.
+The AVISO global MSL data is improved upon specifically for the Arctic Ocean. Data produced is mean sea level trends (mm/year) from 1993-2009
+
+**Data**  
+*Format:* The raw data came as a NetCDF  
+*Values:* The values are in mm/year  
+*Resolution:* 0.125 x 0.125 degrees  
+*Time period:* 1993-2009  
+
+Data was emailed to Jamie on July 24, 2015 from Pierre Prandi.
+
+**Reference:**  
+P. Prandi, M. Ablain, A. Cazenave & N. Picot (2012). A New Estimation of Mean Sea Level in the Arctic Ocean from Satellite Altimetry. *Marine Geodesy*. 35 (1): 61-81.
+
+****
+
+```{r,message=F,verbose=F,quiet=T}
+source('../../common.R')
+```  
+
+**Step One**  
+  
+Rasterize NetCDF data
+
+```{r,message=FALSE,warning=FALSE, eval=F}
+# raw data came as netCDF file but can be opened using raster package
+
+raw = raster(file.path(dir_arctic,'stressors/sealevel/raw/updarc_tendances.nc'),varname='Grid_0001')%>%
+        flip(.,'y')%>%
+         t(.)%>%
+          flip('y')%>%
+            rotate(.)
+
+#set extent and projection
+extent(raw)    <-c(-180,180,50,82)
+projection(raw)<-'+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs, towgs84=0,0,0'
+
+# Reproject to Arctic Projection
+laeaCRS <- CRS("+init=epsg:3572")
+raw_laea = projectRaster(raw,crs=laeaCRS)#,filename='stressors/sealevel/working/arctic_slr_laea.tif',overwrite=T)
+
+plot(raw_laea,col=cols,main='Raw Data: Mean Sea Level Rise (mm/yr)')
+
+```
+
+
+****
+
+**Step Two**  
+
+Interpolate the pan-arctic raw data to the coast to fill in gaps. 
+
+This was done using the SLR_pan-arctic_interpolation.py and saved as 'arctic_slr_laea_int.tif'  
+```{r,message=F,warning=F, eval=F}
+
+pan_laea = raster('working/arctic_slr_laea_int.tif')
+
+plot(pan_laea,col=cols,main='Interpolated raw data across pan-arctic')
+```
+
+  
+**Step Three**  
+
+With the interpolated data, mask out all cells not within our pan-arctic boundaries  
+```{r,message=F,warning=F, eval=F}
+
+pan_slr = mask(pan_laea,pan,progress='text')%>%
+          crop(.,pan,progress='text')%>% #crop to the pan-arctic
+            resample(.,pan_ocean,progress='text') #resample to 1km cell resolution
+
+# set all negative values (decrease in MSL) to NA
+pan_slr[pan_slr<0]<-NA
+
+plot(pan_slr,col=cols,main='Positive values of MSL (mm/year)\n 1993-2009')
+
+# save raster
+#writeRaster(pan_slr,filename=file.path(dir_arctic,'stressors/sealevel/working/pan_slr.tif'),progress='text',overwrite=T)
+```
+
+ 
+**Step Four**  
+  
+Take the pan-arctic raw SLR data clipped to the coast at 1km (by Dan), look at range of values and rescale to an appropriate quantile.  
+```{r,message=F,warning=F, eval=F}
+arcSLR = raster(file.path(dir_arctic,'stressors/sealevel/working/pan_slr_1km_coast.tif'))
+plot(arcSLR,col=cols,main='Raw MSL clipped to coast (1km offshore)')
+
+quantile(arcSLR,prob=c(0.9,0.95,0.98,0.99,0.999,0.9999))
+
+cellStats(arcSLR,stat='range')
+
+```
+
+Rescale using 99 quantile  
+
+```{r,message=F,warning=F, eval=F}
+ref = quantile(arcSLR,prob=0.99)
+
+arcSLR99 = calc(arcSLR,fun=function(x){ifelse(x>ref,1,x/ref)})#,filename='stressors/sealevel/output/pan-arctic_SLR.tif')
+
+plot(arcSLR99,col=cols,main='Pan-arctic Sea Level Stressor Layer')
+```
+
+***
+**Step Five**  
+
+Clip pan-arctic rescaled layer to the bering strait  
+
+```{r,warning=F,message=F, eval=F}
+bsr = crop(arcSLR99,bsr)%>%
+        mask(.,bsr)#,filename='stressors/sealevel/output/bsr_SLR.tif')
+plot(bsr,col=cols,main='Bering Strait Sea Level Stressor Layer')
+```

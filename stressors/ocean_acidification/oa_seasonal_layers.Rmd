@@ -1,0 +1,409 @@
+---
+title: "Creating Pan-Arctic and Bering Sea ocean acidification pressure layers for the ice and ice free seasons"
+author: "Jamie Afflerbach"
+date: "11/10/2015"
+output: html_document
+---
+
+This script creates the OA stressor layers for pan-arctic and bering strait region.  
+   
+##Overview  
+
+The 'oa_seasonal_dataprep.Rmd' calculated mean seasonal aragonite saturation state. The seasons are:  
+   
+   1. **ice**: November to May of the next year. Since the raw data goes from 1880-1889 and 2005-2014, for each decade we have just 9 sesaonal averages due to cross year inclusion in the ice season.  
+   2. **ice-free**: June to October
+
+
+This script takes prepped Ocean Acidification input raster layers (created by oa_dataprep.R) and does the following:  
+
+     1. Takes each of the raster layers produced in (b) above, and subtracts the historical global mean (produced in step 1) 
+        to create 10 new raster layers (one for each year) with values equal to the change in aragonite saturation state  
+     2. RESCALE: For each year between 2005 and 2014, look at the mean annual aragonite saturation state rasters (annualmean_2005-2014).   
+        All values at or below the threshold (<=1) are set to 1 (highest pressure value). All cells with aragonite saturation state values >1   
+        will be scaled based on their change relative to historical levels (calculated in step 2 above). All cells that have a negative change   
+        (indicating a decrease in acidification) are assigned 0    
+     3. Resamples each raster to 1km  
+     4. Using ArcGIS through arcpy in python, NA cells are interpolated using nearest neighbor to create final output raster layer  
+
+While this script calculates OA for pan-arctic and, just clips the output layer to the bering strait. There are built in functions that allow for the BSR region to be calculated without the pan-arctic calculation.
+
+*NOTE: Interpolation was done in ArcGIS using OA_interpolation.py*
+
+*** 
+
+
+##Setup
+
+```{r setup, message=F,warning=F,echo=F}
+source('../../common.R')
+```
+
+##Data
+
+```{r data, message=F,warning=F}
+
+hist_ice_mean = raster('working/annualmean_1880-1889_iceseason/decadal_mean_1880-1889_ice.tif') # historical decadal mean of aragonite saturation state from 1880-1889 in the ice season
+
+hist_icefree_mean = raster('working/annualmean_1880-1889_icefreeseason/decadal_mean_1880-1889_icefree.tif') # historical decadal mean of aragonite saturation state from 1880-1889 in the ice-free season
+
+ice_files = list.files('working/annualmean_2005-2014_iceseason',full.names=TRUE,recursive=TRUE)
+
+icefree_files = list.files('working/annualmean_2005-2014_icefreeseason',full.names=TRUE,recursive=TRUE)
+```
+
+##Methods  
+
+###Step 1: Clip data to bsr and panarctic  
+
+```{r step 1, message=F,warning=F,eval=F}
+
+
+pan_mask = function(file, season){
+  
+  if(season=='ice'){
+  yr = substr(file,72,76)
+  }else{
+  yr = substr(file,80,83)}
+  r = raster(file)
+  crop = crop(r,pan)
+  mask_r = mask(crop,pan,progress='text')
+  if(season=='ice'){
+  writeRaster(mask_r,filename=paste0('working/pan-arctic/ice_season/raw_crop/oa_raw_crop_',yr,sep=''),format='GTiff',overwrite=T) 
+  }else{
+  writeRaster(mask_r,filename=paste0('working/pan-arctic/icefree_season/raw_crop/oa_raw_crop_',yr,sep=''),format='GTiff',overwrite=T) 
+  }
+}
+
+sapply(ice_files,pan_mask,season='ice') #set season to either 'ice' or 'icefree'
+sapply(icefree_files,pan_mask,season='icefree') #set season to either 'ice' or 'icefree'
+
+# also do the same for historical mean
+
+pan_hist = hist_ice_mean%>%
+            crop(.,pan)%>%
+              mask(.,pan,filename='working/pan-arctic/ice_season/raw_crop/hist_mean_1880_1889_ice_crop.tif',
+                   overwrite=T,progress='text')
+
+pan_hist_icefree = hist_icefree_mean%>%
+            crop(.,pan)%>%
+              mask(.,pan,filename='working/pan-arctic/icefree_season/raw_crop/hist_mean_1880_1889_icefree_crop.tif',
+                   overwrite=T,progress='text')
+```
+
+Plot
+```{r plot, message=F,warning=F}
+
+pan_hist=raster('working/pan-arctic/ice_season/raw_crop/hist_mean_1880_1889_ice_crop.tif')
+pan_hist_icefree = raster('working/pan-arctic/icefree_season/raw_crop/hist_mean_1880_1889_icefree_crop.tif')
+
+par(mfrow=c(2,1),mar=c(1,2,4.1,2.1))
+
+plot(pan_hist,col=cols,box=F,axes=F,main='Historical Aragonite Saturation State\n Nov-May 1880-1889')
+plot(pan_hist_icefree,col=cols,box=F,axes=F,main='Historical Aragonite Saturation State\n June-Oct 1880-1889')
+```
+
+
+###Step 2: function that subtracts annual mean from historical decadal mean and outputs raster to specified folder.
+
+This function takes the annual average for each ice and ice free season and compares to the historical mean for that season. The **percent change** is calculated. As an example, if a cell in the ice season historically had a mean aragonite saturation state of 2, but now is on average 1.6, the resulting value for that cell will be 0.2. This corresponds with a 20% decrease in saturation state.
+
+For cells that have increased over time, these will show as negative values and will eventually be given a value of 0 as we are only interested in acidifying regions.
+
+
+```{r, message=F,warning=F, eval=F}
+
+pan_annual_change = function(file,season){
+  
+  if(season=='ice'){
+    
+      yr = substr(file,52,56)         #use substr to grab the year out of the filename
+ 
+      out = (pan_hist - raster(file))/pan_hist   #subtract current from historical. Although this is counterintuitive, it results in the 
+                                      #correct scaling of values (higher values = more acidification)
+
+  writeRaster(out,filename=paste0('working/pan-arctic/ice_season/annualchange/difference_from_hist_mean_',yr,sep=""),
+              format='GTiff',overwrite=T)
+  
+  }else{
+    
+    yr=substr(file,56,59)
+
+    out = (pan_hist_icefree - raster(file))/pan_hist_icefree   #subtract current from historical. Although this is counterintuitive, it results in the 
+                                            #correct scaling of values (higher values = more acidification)
+
+    writeRaster(out,filename=paste0('working/pan-arctic/icefree_season/annualchange/difference_from_hist_mean_',yr,sep=""),
+                format='GTiff',overwrite=T)
+  }
+}
+
+#list files to apply function to
+    panfiles_ice = list.files(path = 'working/pan-arctic/ice_season/raw_crop',
+                              pattern='oa_*',full.names=T)
+    panfiles_icefree = list.files(path = 'working/pan-arctic/icefree_season/raw_crop',
+                                  pattern='oa_*',full.names=T)
+
+
+# apply function across all files using sapply
+    sapply(panfiles_ice,pan_annual_change,season='ice')
+    sapply(panfiles_icefree,pan_annual_change,season='icefree')
+
+```
+
+
+###Step (3): Rescale values
+
+For each year between 2005 and 2014, look at the mean annual aragonite saturation state rasters (annualmean_2005-2014). All values at or below the threshold (<=1) are set to 1 (highest pressure value). All cells with aragonite saturation state values >1, will be scaled based on their change relative to historical levels (calculated in step 2 above). 
+
+
+```{r rescale values, message=F,warning=F,eval=F}
+
+#list files for annual change calculated in previous step. These are referenced within the function
+    
+    pan_change_ice     = list.files('working/pan-arctic/ice_season/annualchange',full.names=TRUE,recursive=TRUE) 
+    pan_change_icefree = list.files('working/pan-arctic/icefree_season/annualchange',full.names=TRUE,recursive=TRUE) 
+
+#Function
+    
+pan_rescale = function(file, season){
+  
+  if(season=='ice'){
+    
+  yr   = substr(file,52,56)         #get year of file
+  mean = raster(file)               #get seasonal mean aragonite raster for given year
+  diff = raster(pan_change_ice[substr(pan_change_ice,70,74)==yr])  #get the change raster for same year 
+  
+  #out = overlay(mean,diff,fun=function(x,y){y^(x-1)})
+  
+  mean[mean<=1]<-1                                #all values at or less than 1 are given a value of 1
+  mean[mean>1] = diff[mean>1]                      #all cells with values greater than 1 are swapped out with their amount of change scaled to how close to 1 
+  mean[mean<0]<-0                                 #all values less than 0 (indicating a decrease in acidity) are capped at 0
+  
+  writeRaster(mean,filename=paste0('working/pan-arctic/ice_season/rescaled/oa_rescaled_',yr,sep=""),format='GTiff',overwrite=T)
+  
+  }else{
+    
+      yr   = substr(file,56,59)                                                #get year of file
+      mean = raster(file)                                                      #get annual mean aragonite raster for given year
+      diff = raster(pan_change_icefree[substr(pan_change_icefree,74,77)==yr])  #get the change raster for same year
+      
+      #out = overlay(mean,diff,fun=function(x,y){y^(x-1)})
+      
+      mean[mean<=1]<-1                             #all values at or less than 1 are given a value of 1
+      mean[mean>1] = diff[mean>1]                   #all cells with values greater than 1 are swapped out with their amount of change scaled to how close to 1
+      mean[mean<0]<-0                              #all values less than 0 (indicating a decrease in acidity) are capped at 0
+      
+      writeRaster(mean,filename=paste0('working/pan-arctic/icefree_season/rescaled/oa_rescaled_',yr,sep=""),
+                format='GTiff',overwrite=T)
+    
+  }
+  
+}
+
+# list files
+    
+    ice_avgs     = list.files('working/pan-arctic/ice_season/raw_crop',pattern='oa_*',full.names = T)
+    icefree_avgs = list.files('working/pan-arctic/icefree_season/raw_crop', pattern='oa_*',full.names=T)
+    
+ 
+# apply function to files
+    
+sapply(ice_avgs,pan_rescale, season='ice')
+sapply(icefree_avgs,pan_rescale, season='noice')
+
+```
+
+###Step 3: Resample to 1km
+
+```{r, message=F,warning=F,eval=F}
+
+pan_resample = function(file,season){
+  
+  if(season=='ice'){
+    
+    yr  = substr(file,52,56)
+    r   = raster(file)
+    out = raster::resample(r,pan_ocean,method='ngb',progress='text') # resample r to the resolution of 'ocean' (~1km)
+    
+    writeRaster(out,filename=paste0('working/pan-arctic/ice_season/rescaled_1km/oa_rescaled_1km_',yr,sep=''),
+                format='GTiff',overwrite=T)
+    
+  }else{
+    
+    yr = substr(file,56,59)
+    r   = raster(file)
+    out = raster::resample(r,pan_ocean,method='ngb',progress='text') # resample r to the resolution of 'ocean' (~1km)
+    
+    writeRaster(out,filename=paste0('working/pan-arctic/icefree_season/rescaled_1km/oa_rescaled_1km_',yr,sep=''),
+                format='GTiff',overwrite=T)
+    
+  }
+  
+}
+
+pan_rescaled_ice     = list.files('working/pan-arctic/ice_season/rescaled',full.names=T)
+pan_rescaled_icefree = list.files('working/pan-arctic/icefree_season/rescaled',full.names=T)
+
+sapply(pan_rescaled_ice,pan_resample,season='ice')
+sapply(pan_rescaled_icefree,pan_resample,season='noice')
+
+```
+
+
+###Step 4: Interpolate to coast. This was done manually in ArcGIS (Jamie Afflerbach)
+
+Interpolation to fill in NA cells with values of the nearest neighbor is done within the 'OA_interpolation.py' python script, which relies on arcpy (ArcGIS)
+
+```{r, message=F,warning=F, eval=F}
+pan_int_ice     = list.files('working/pan-arctic/ice_season/rescaled_1km_int',full.names=T)
+pan_int_icefree = list.files('working/pan-arctic/icefree_season/rescaled_1km_int',full.names=T)
+```
+
+###Step 5: Clip out ocean
+
+Each interpolated raster needs to have all land cells clipped out. Using the ocean raster again, mask the interpolated rasters to select just those in the oceanic regions.
+
+
+```{r, message=F,warning=F,eval=F}
+
+pan_ocean_clip = function(file,season){
+  
+  if(season=='ice'){
+  
+    yr  = substr(file,64,68)
+    r   = raster(file)
+    out = mask(r,pan_ocean,progress='text')
+  
+    writeRaster(out,filename=paste0('output/pan-arctic/ice_season/oa_rescaled_1km_int_clip_',yr,sep=''),format='GTiff',overwrite=T)
+    
+  }else{
+   
+     yr  = substr(file,68,71)
+     r   = raster(file)
+     out = mask(r,pan_ocean,progress='text')
+  
+    writeRaster(out,filename=paste0('output/pan-arctic/icefree_season/oa_rescaled_1km_int_clip_',yr,sep=''),format='GTiff',overwrite=T)
+    
+     
+  }
+  
+}
+
+sapply(pan_int_ice,pan_ocean_clip, season='ice')
+sapply(pan_int_icefree,pan_ocean_clip,season='noice')
+
+```
+
+Clip to Bering Strait Region
+```{r clip bsr, message=F,warning=F, eval=F}
+
+#this clips the raster layers created in the pan_ocean_clip function to the bering strait
+
+pan_oa_ice     = list.files(path='output/pan-arctic/ice_season',full.names=T)
+pan_oa_icefree = list.files(path='output/pan-arctic/icefree_season',full.names=T)
+
+
+bsr_ocean_clip = function(file,season){
+  
+  if(season=='ice'){
+    
+      yr  = substr(file,55,59)
+      r   = raster(file)
+      out = crop(r,bsr)%>%mask(.,bsr_ocean,progress='text')
+      
+      writeRaster(out,filename=paste0('output/bsr/ice_season/oa_rescaled_1km_int_clip_',yr,sep=''),format='GTiff',overwrite=T)
+  
+  }else{
+    
+    yr  = substr(file,59,62)
+    r   = raster(file)
+    out = crop(r,bsr)%>%mask(.,bsr_ocean,progress='text')
+  
+  writeRaster(out,filename=paste0('output/bsr/icefree_season/oa_rescaled_1km_int_clip_',yr,sep=''),format='GTiff',overwrite=T)
+  }
+}
+
+
+sapply(pan_oa_ice,bsr_ocean_clip,season='ice')
+sapply(pan_oa_icefree,bsr_ocean_clip,season='noice')
+
+```
+
+###Step 6: Average last four years to create final output for bsr and panarctic
+
+```{r, message=F,warning=F}
+
+bsr_ice     = list.files('output/bsr/ice_season',full.names=T)
+bsr_icefree = list.files('output/bsr/icefree_season',full.names=T)
+
+#get 4 year average for the BSR ice season
+    bsr_ice_4yr = stack(bsr_ice[substr(bsr_ice,48,49) %in% c(10,11,12,13)])%>%
+                   calc(.,fun=function(x){mean(x,na.rm=T)},progress='text')
+    
+    
+    plot(bsr_ice_4yr,zlim=c(0,1),col=cols,box=F,axes=F, main = 'Ocean Acidification Stressor \n Nov - May (2010-2014)')
+    
+    writeRaster(bsr_ice_4yr,filename='../seasonal_output/oa_avg_iceseason_2010-2014.tif',overwrite=T)
+
+#get 4 year average for the BSR icefree season
+    
+bsr_icefree_4yr = stack(bsr_icefree[substr(bsr_icefree,52,55) %in% c(2011:2014)])%>%
+                    calc(.,fun=function(x){mean(x,na.rm=T)},progress='text')
+
+    plot(bsr_icefree_4yr,zlim=c(0,1),col=cols,box=F,axes=F, main='Ocean Acidification Stressor \n June - Oct (2011-2014)')
+    
+    writeRaster(bsr_icefree_4yr,filename='../seasonal_output/oa_avg_icefreeseason_2011-2014.tif',overwrite=T)
+    
+    
+par(mfrow=c(1,2))
+plot(bsr_ice_4yr,col=cols, box=F,axes=F,main='Ocean Acidification Stressor \n November - May (2010-2014)', zlim=c(0,1))
+plot(bsr_icefree_4yr,zlim=c(0,1),col=cols,box=F,axes=F, main='Ocean Acidification Stressor \n June - Oct (2011-2014)')
+```
+
+Get 4 year pan-arctic OA layer for ice and ice-free seasons
+
+```{r, echo=F}
+
+p1 = list.files('output/pan-arctic/ice_season',full.names=T)
+p2 = list.files('output/pan-arctic/icefree_season',full.names=T)
+
+pan_4yr_ice = stack(p1[6:9])%>%
+               calc(.,fun=function(x){mean(x,na.rm=T)},progress='text', filename='output/pan-arctic/oa_ice_2010-2014.tif',overwrite=T)
+
+pan_4yr_icef = stack(p2[7:10])%>%
+               calc(.,fun=function(x){mean(x,na.rm=T)},progress='text', filename='output/pan-arctic/oa_icefree_2011-2014.tif',overwrite=T)
+
+par(mfrow=c(1,2))
+plot(pan_4yr_ice,col=cols,box=F,axes=F,main='Pan-arctic Ocean Acidification Ice Season \n 2010-2014')
+plot(pan_4yr_icef,col=cols,box=F,axes=F,main='Pan-arctic Ocean Acidification Icefree Season \n 2011-2014')
+
+```
+
+
+###Step 7: Create a raster showing what cells were interpolated
+
+This creates just one raster. All ten output OA rasters have the same cells interpolated
+
+The original data rescaled and resampled, before interpolation (grab one of the 10 layers for this - doesn't matter)
+```{r, message=F,warning=F, eval=F}
+
+#The original data rescaled and resampled, before interpolation (grab one of the 10 layers for this - doesn't matter)
+
+pan_pre = raster('working/pan-arctic/ice_season/rescaled_1km/oa_rescaled_1km_13-14.tif')
+
+#after interpolation, and after land clipped out
+
+pan_post = raster('output/pan-arctic/ice_season/oa_rescaled_1km_int_clip_13-14.tif')
+
+
+interp_cells = mask(pan_post,pan_pre,progress='text',inverse=TRUE,filename='output/pan-arctic/oa_interpolated_cells.tif',overwrite=T)
+bsr_interp = crop(interp_cells,bsr)%>%mask(.,bsr_ocean,filename='output/bsr/oa_interpolated_cells.tif',overwrite=T)
+```
+
+```{r}
+bsr_interp=raster('output/bsr/oa_interpolated_cells.tif')
+
+plot(bsr_interp,col=cols,box=F,axes=F,main='Interpolated cells in the Bering Strait \n Ocean Acidification')
+```
+
+

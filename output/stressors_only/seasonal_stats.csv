@@ -1,0 +1,37 @@
+Key,Season,MEAN,STD,MIN,MAX
+CC_SST_IMP,Ice Season,0.0,0.01,0.0,0.2
+CC_SST_IMP,Ice Free Season,0.1,0.08,0.0,0.5
+CC_SST_IMP,Annual,0.04,0.06,0.0,0.41
+DND_HB_IMP,Ice Season,0.11,0.19,0.0,1.0
+DND_HB_IMP,Ice Free Season,0.11,0.19,0.0,1.0
+DND_HB_IMP,Annual,0.11,0.19,0.0,1.0
+NI_IMP,Ice Season,0.0,0.01,0.0,0.15
+NI_IMP,Ice Free Season,0.0,0.05,0.0,0.85
+NI_IMP,Annual,0.01,0.05,0.0,1.0
+DDF_IMP,Ice Season,0.1,0.18,0.0,1.0
+DDF_IMP,Ice Free Season,0.1,0.18,0.0,1.0
+DDF_IMP,Annual,0.1,0.18,0.0,1.0
+OP_IMP,Ice Season,0.0,0.01,0.0,0.15
+OP_IMP,Ice Free Season,0.0,0.03,0.0,0.85
+OP_IMP,Annual,0.0,0.04,0.0,1.0
+PLB_IMP,Ice Season,0.01,0.06,0.0,1.0
+PLB_IMP,Ice Free Season,0.01,0.06,0.0,1.0
+PLB_IMP,Annual,0.01,0.06,0.0,1.0
+CC_SLR_IMP,Ice Season,0.01,0.02,0.0,0.43
+CC_SLR_IMP,Ice Free Season,0.05,0.03,0.0,0.45
+CC_SLR_IMP,Annual,0.06,0.04,0.0,0.46
+DND_LB_IMP,Ice Season,0.07,0.17,0.0,1.0
+DND_LB_IMP,Ice Free Season,0.07,0.17,0.0,1.0
+DND_LB_IMP,Annual,0.07,0.17,0.0,1.0
+MP_IMP,Ice Season,0.05,0.02,0.03,0.28
+MP_IMP,Ice Free Season,0.05,0.02,0.03,0.28
+MP_IMP,Annual,0.05,0.02,0.03,0.28
+OA_IMP,Ice Season,0.25,0.21,0.16,1.0
+OA_IMP,Ice Free Season,0.16,0.03,0.09,0.25
+OA_IMP,Annual,0.3,0.05,0.21,0.4
+CA_IMP,Ice Season,0.01,0.05,0.0,1.0
+CA_IMP,Ice Free Season,0.07,0.13,0.0,1.0
+CA_IMP,Annual,0.03,0.05,0.0,1.0
+CC_UV_IMP,Ice Season,0.01,0.01,0.0,0.38
+CC_UV_IMP,Ice Free Season,0.15,0.14,0.0,0.52
+CC_UV_IMP,Annual,0.16,0.15,0.0,0.52

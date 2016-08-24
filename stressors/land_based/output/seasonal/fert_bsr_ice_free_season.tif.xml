@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20151214</CreaDate><CreaTime>13384000</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\desktop10.3\ArcToolbox\Toolboxes\Spatial Analyst Tools.tbx\RasterCalculator" Date="20151214" Time="133840">RasterCalculator "fert_bsr_rescaled.tif"*0.8473 C:\arctic\seasonal_stressors\fert_bsr_ice_free_season.tif</Process></lineage></DataProperties></Esri></metadata>

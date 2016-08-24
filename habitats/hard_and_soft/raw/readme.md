@@ -1,0 +1,1 @@
+The raw data for these layers came from the [Arctic Marine Synthesis](http://ak.audubon.org/sites/default/files/documents/6._sea_floor_substrate.pdf)

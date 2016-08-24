@@ -1,0 +1,247 @@
+---
+title: "Create catch by gear rasters for Russian Side"
+author: "Jamie Afflerbach"
+date: "10/1/2015"
+output: html_document
+---
+
+This script uses the data provided by SAUP to rasterize catch by gear for the Russian EEZ within the BSR.  
+
+The total propotion of catch caught by each of the 5 gear types was calculated in `calc_catch_by_gear_proportions.Rmd`. This script applys the catch data to those proportions. Output will then be updated with US/Alaska specific data to create the final output layers.  
+
+```{r,echo=F}
+
+invisible(source('../../common.R'))
+
+```
+
+***  
+
+Read in Russian data from SAUP
+```{r,message=F,warning=F}
+    
+raw = read.csv(file.path(dir_arctic,'stressors/commercial_fisheries/raw/SAUP/LME54_DataVersion40-Setp-14-2015.csv'))
+
+# we are really only interested in maybe the last ten years so lets go back to 2000.
+
+data = raw%>%filter(Year>1999)
+    
+```
+
+Based on the SAUP data exploration (link here to .html), it is clear that there is no catch data for the northern half of the Russian EEZ region.
+
+First - we need to rasterize the catch data
+
+```{r,message=F,warning=F}
+
+# Read in SAUP LME shapefile
+
+lme_shp = readOGR(dsn=file.path(dir_arctic,'stressors/commercial_fisheries/gis/SAU_LME_July24_2015'),layer='SAU_LME_July24_2015', verbose=F)
+
+lme_54 <- lme_shp[lme_shp$LME_NUMBER==54,]
+
+lme_54 <- spTransform(lme_54,laeaCRS)
+
+plot(lme_54,main='LME 54 from SAUP')
+plot(bsr,add=T,col='red')
+```
+
+Bring in the SAUP regions shapefile to combine with the LME shapefile
+
+```{r regions shp, message=F,warning=F}
+
+eez_shp = readOGR(dsn=file.path(dir_arctic,'stressors/commercial_fisheries/gis/SAU_EEZ_High_Seas'),layer='SAU_EEZ_High_Seas',verbose=F)
+
+# The four EEZ regions within the LME 54 are: EEZID: 912 (RUS), 649 (RUS), 959 (AK) and 958
+
+eez_bsr <- eez_shp[eez_shp$EEZID %in% c(912, 649, 959, 958),]
+
+eez_bsr <- spTransform(eez_bsr,laeaCRS)
+
+plot(eez_bsr) #not sure why the eez across the arctic ocean is showing up...
+
+```
+
+SAUP provided data split up by 4 regions that overlap with the LME:  
+- Russia (Far East)  
+- Russia (Laptev to Chukchi Sea)  
+- USA (Alaska, Arctic)  
+- USA (Alaska, Subarctic)
+
+Intersect the LME and EEZ shapefiles to get the specific regions within LME 54 that have catch.
+
+```{r,message=F,warning=F}
+
+int <- raster::intersect(lme_54,eez_bsr) #intersect the LME and EEZ Region shapfiles to just the LME region.
+
+int@data = int@data%>%
+            select(LME_NUMBER, LME_NAME,Shape_Area, EEZID,F_AREA) #remove extra columns that we don't need
+
+plot(int,main = 'Intersection of LME and EEZs in our region')
+```
+
+We know that no fishing takes place in the two regions that fall in FAO area 18 so remove those, and also remove the US side since we have better data for the fishing that takes place in this region
+```{r,message=F,warning=F}
+
+polys <- int[int$F_AREA %in% c(61,67),]
+plot(polys)
+
+rus_polys <- polys[polys$EEZID==649,]
+
+plot(bsr,main='BSR Region to update with new SAUP data \n(Russian side of BSR)')
+plot(rus_polys,add=T,col='green')
+
+```
+
+
+Now looking at the fishing data for this region (see .html) it is clear that alaskan pollock is far and away the biggest fishery. This is most likely using pelagic low bycatch gear. 
+
+First we are going to apply the catch for pollock to this region and call it pelagic low bycatch.
+
+```{r,message=F,warning=F}
+
+#Need to get all commercial fishing of Alaskan Pollock
+
+rus_FE = data%>%
+          filter(EEZName == 'Russia (Far East)',
+                 Year>2004,
+                 Sector=='Industrial')%>%
+            group_by(TaxonName,CommonName)%>%
+              summarize(avg_catch = mean(CatchAmount))
+
+pollock = filter(rus_FE,CommonName =='Alaska pollock')
+pollock
+
+```
+Average catch per year over 2005-2010 is 173,734.35 tons. The next biggest fishery is Same-spine stone crab at 8,967 tons per year.
+
+Now we need to calculate catch per cell based on the number of cells where fishing happens and how much proportional catch is caught in those cells (according to the original SAUP data)
+
+
+Create pollock catch per cell (will be used for pelagic layer)
+
+```{r,message=F,warning=F}
+
+#Bring in pel_lb for BSR (Cropped from SAUP catch by gear data) and mask out russian side
+
+
+pel_lb        = raster('working/pel_lb_raw_bsr.tif')%>%
+                  mask(rus_polys)
+
+plot(pel_lb,col=cols)
+
+# Now create a raster of total proportion of catch seen in pel_lb that are in each cell
+
+tot = cellStats(pel_lb,stat='sum')
+
+catch_prop = pel_lb/tot
+
+plot(catch_prop,col=cols)
+
+#create catch per cell
+
+
+poll_per_cell = pollock$avg_catch*catch_prop #total pollock catch is 173,734.3 tons. 
+
+plot(poll_per_cell,col=cols)
+
+#check
+cellStats(poll_per_cell,stat='sum')#total pollock catch is 173,734.3 tons.  They match!
+
+#save
+
+writeRaster(poll_per_cell,filename='working/rus_poll_catch_per_cell.tif',overwrite=T)
+```
+
+Now create the rest of the catch rasters for the russian side
+```{r catch by gear, message=F, warning=F}
+
+other_catch = rus_FE%>%
+                filter(CommonName != 'Alaska pollock')
+
+```
+
+
+```{r gear props, message=F,warning=F}
+
+dem_d = raster('working/dem_d_raw_bsr_prop.tif')%>%
+          mask(rus_polys)
+dem_nd_lb = raster('working/dem_nd_lb_raw_bsr_prop.tif')%>%
+          mask(rus_polys)
+dem_nd_hb = raster('working/dem_nd_hb_raw_bsr_prop.tif')%>%
+          mask(rus_polys)
+pel_lb    = raster('working/pel_lb_raw_bsr_prop.tif')%>%
+          mask(rus_polys)
+
+
+s = stack(dem_d,dem_nd_lb,dem_nd_hb,pel_lb)
+plot(s,col=cols)
+
+```
+
+There is no pelagic high bycatch layer (no fishing of this type in our region)  
+
+
+Calculate catch per cell for each of the 5 layers
+```{r,mesage=F,warning=F}
+
+catch = sum(other_catch$avg_catch)
+
+#get total number of cells where catch occurs
+
+fish_cells = calc(s,sum)
+
+fish_cells[fish_cells==0]<-NA
+
+fish_cells[!is.na(fish_cells)]<-1
+
+#total cells
+
+tot_cell = cellStats(fish_cells,stat='sum',na.rm=T) #154909
+
+
+#rasterize catch per cell (all fished cells)
+
+catch_per_cell = catch/154909
+
+
+catch_ras = rasterize(rus_polys,fish_cells,catch_per_cell)%>%
+              mask(fish_cells)
+
+plot(catch_ras)
+
+cellStats(catch_ras,stat='sum') #68,313.09   they match!
+
+pel_lb_rus    = overlay(catch_ras,pel_lb, fun=function(x,y){x*y},filename='working/pel_lb_rus_catch.tif',overwrite=T)   
+dem_nd_hb_rus = overlay(catch_ras,dem_nd_hb, fun=function(x,y){x*y},filename='working/dem_nd_hb_rus_catch.tif',overwrite=T)
+dem_nd_lb_rus = overlay(catch_ras,dem_nd_lb, fun=function(x,y){x*y},filename='working/dem_nd_lb_rus_catch.tif', overwrite=T)
+dem_d_rus     = overlay(catch_ras,dem_d, fun=function(x,y){x*y},filename='working/dem_d_rus_catch.tif',overwrite=T)   
+
+```
+
+
+Check that the total catch adds up to what we expect (`r sum(other_catch$avg_catch)`)
+```{r check, message=F, warning=F}
+
+s = stack(pel_lb_rus,dem_d_rus, dem_nd_lb_rus,dem_nd_hb_rus)
+
+plot(s,col=cols)
+
+all = calc(s,sum)
+
+cellStats(all,stat='sum') #68313.09   it matches!
+```
+
+Combine the pelagic low bycatch layer with the pollock layer for final low bycatch  
+
+```{r pel lowbycatch, message=F, warning=F}
+
+full_pel_lb = pel_lb_rus + poll_per_cell
+
+plot(full_pel_lb,col=cols)
+
+writeRaster(full_pel_lb,filename='working/pel_lb_rus_catch.tif',overwrite=T)
+
+```
+
+

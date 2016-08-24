@@ -1,0 +1,252 @@
+---
+title: "Data prep for creating seasonal OA layers for the BSR"
+author: "Jamie Afflerbach"
+date: "11/10/2015"
+output: html_document
+---
+
+```{r setup,message=F,warning=F}
+
+source('../../common.R')
+
+#libraries
+
+  library(ncdf4)
+  library(maps)
+
+```
+
+###Read in NetCDF data and get aragonite variable
+
+```{r read in data, message=F,warning=F, eval=F}
+
+data_nc_18 = nc_open(file.path(dir_arctic,'stressors/ocean_acidification/raw/cesm_co2sys_1880-1889.nc'))
+print(data_nc_18)
+
+# read in 2005-2014 data
+
+data_nc_20 = nc_open(file.path(dir_arctic,'stressors/ocean_acidification/raw/cesm_co2sys_2005-2014.nc'))
+print(data_nc_20)
+
+# longitude values are stored in the variable 'TLONG'
+
+long <- ncvar_get(data_nc_18,varid='TLONG') #same lat and long for both data sets so just reading in from data_nc_18 works
+
+# latitude values are stored in the variable 'TLAT'
+
+lat <- ncvar_get(data_nc_18,varid='TLAT')
+
+
+# select the surface aragonite variable (OARG)
+
+arag_18 <- ncvar_get(data_nc_18,varid="OARG")
+arag_20 <- ncvar_get(data_nc_20,varid="OARG")
+
+```
+
+###Get seasonal (June - Oct) averages for each year in the 2 decades
+
+
+```{r ice season, message=F, warning = F, eval=F}
+
+#ice_arag is a function that calculates seasonal average surface aragonite saturation for the ice season
+
+ice_arag<-function(data){
+  
+  for(i in seq(11,107,by=12)){
+    
+    print(i) # i is the first month of the year
+      
+    j = i+6 #start in november, add 6 months to get to may
+      
+    seas = data[,,i:j] #select the monthly layers for each year (nov to next year may)
+
+    seas_mean = apply(seas,1:2,mean) # get the mean
+    
+    #create an array with long, lat, aragonite mean data
+    A <- array(c(long,lat,seas_mean),dim=c(320,384,3))
+    B <- apply(A, 3, cbind)
+    
+    #lon=x, lat=y
+    x = B[,1]
+    y = B[,2]
+    
+    
+    C = as.data.frame(B)
+    names(C)<-c('x','y','value')
+    
+    #set extent to lon/lat
+    e <- extent(C[,1:2])
+    r <- raster(e,ncol=320,nrow=384) #create empty raster with e extent
+    
+    #rasterize the dataframe
+    out <- rasterize(C[,1:2],r,C[,3],fun=function(x,...)mean(x),progress='text') # i had to create a mean function here for "multiple points in a cell"
+    extent(out)<-c(0,360,-80,90) #data extent is 0,360,-8090 (the -80 is not a typo)
+    out <- rotate(out) #shifts data from 0-360 to -180-180
+    
+    # land cells are given large, strange value, so set these to NA by just choosing an absurdly large number (in this case 40000000)
+
+    out[out>400000000]<-NA
+  
+    
+    # Define initial projection for out
+    projection(out) <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
+    
+    
+    # define alternate projections
+    laeaCRS <- CRS("+init=epsg:3572")
+    
+    # then convert to mollweide and other projections
+    out_laea <- projectRaster(out,crs=laeaCRS)
+
+    
+    #Saving rasters in LAEA projection for Arctic Options
+
+    writeRaster(out_laea,paste0("working/annualmean_2005-2014_iceseason/global_arag_avg_laea_ice_season_",
+                                i, sep=""),format='GTiff', overwrite=T)
+ 
+    #currently, the naming convention is a little wonky. The files are saved as follows:
+    # For the year 1880: 'global_arag_avg_laea_ice_season_11.tif' (i = 11)
+    # For the year 1881: 'global_arag_avg_laea_ice_season_13.tif'(i = 13)
+    # I've been renaming these manually but suggest finding an alternate way to do this
+    
+  }    
+}
+
+#run the function
+ice_arag(arag_18) #ice season
+ice_arag(arag_20)
+
+```
+
+###Plot ice season seasonal averages for 2005-2014
+
+```{r plot ice, meessage=F,warning=F}
+
+l = list.files('working/annualmean_2005-2014_iceseason',full.names = T)
+
+stack = stack(l)
+
+plot(stack,col=cols)
+
+#animate(stack, pause=0.25)
+
+```
+
+###Caculating ice-free seasonal averages
+
+```{r ice-free season, message=F, warning = F,eval=F}
+
+#icefree_arag is a function that calculates seasonal average surface aragonite saturation for the ice season
+
+icefree_arag<-function(data){
+  
+  for(i in seq(6,114,by=12)){
+    
+    print(i) # i is the first month of the year
+      
+    j = i+4 #start in June, add 4 months to get through october
+      
+    seas = data[,,i:j] #select the monthly layers for each year
+
+    seas_mean = apply(seas,1:2,mean) # get the mean
+    
+    #create an array with long, lat, aragonite mean data
+    A <- array(c(long,lat,seas_mean),dim=c(320,384,3))
+    B <- apply(A, 3, cbind)
+    
+    #lon=x, lat=y
+    x = B[,1]
+    y = B[,2]
+    
+    
+    C = as.data.frame(B)
+    names(C)<-c('x','y','value')
+    
+    #set extent to lon/lat
+    e <- extent(C[,1:2])
+    r <- raster(e,ncol=320,nrow=384) #create empty raster with e extent
+    
+    #rasterize the dataframe
+    out <- rasterize(C[,1:2],r,C[,3],fun=function(x,...)mean(x),progress='text') # i had to create a mean function here for "multiple points in a cell"
+    extent(out)<-c(0,360,-80,90) #data extent is 0,360,-8090 (the -80 is not a typo)
+    out <- rotate(out) #shifts data from 0-360 to -180-180
+    
+    # land cells are given large, strange value, so set these to NA by just choosing an absurdly large number (in this case 40000000)
+
+    out[out>400000000]<-NA
+  
+    
+    # Define initial projection for out
+    projection(out) <- "+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"
+    
+    
+    # define alternate projections
+    laeaCRS <- CRS("+init=epsg:3572")
+    
+    # then convert to mollweide and other projections
+    out_laea <- projectRaster(out,crs=laeaCRS)
+
+    
+    #Saving rasters in LAEA projection for Arctic Options
+
+    writeRaster(out_laea,paste0("working/annualmean_2005-2014_icefreeseason/global_arag_avg_laea_icefree_season_",
+                                i, sep=""),format='GTiff', overwrite=T)
+
+    #currently, the naming convention is a little wonky. The files are saved as follows:
+    # For the year 1880: 'global_arag_avg_laea_ice_season_11.tif' (i = 11)
+    # For the year 1881: 'global_arag_avg_laea_ice_season_13.tif'(i = 13)
+    # I've been renaming these manually but suggest finding an alternate way to do this
+    
+  }    
+}
+
+#run the function
+icefree_arag(arag_18) #ice season
+icefree_arag(arag_20)
+
+```
+
+###Plot ice free seasonal averages for 2005-2014
+
+```{r plot icef, meessage=F,warning=F}
+
+l = list.files('working/annualmean_2005-2014_iceseason',full.names = T)
+
+stack = stack(l)
+
+plot(stack,col=cols)
+
+#animate(stack, pause=0.25)
+
+```
+
+###Calculate decadal historical mean for each season
+
+```{r ice decadal mean,message=F,warning=F}
+
+ice = list.files('working/annualmean_1880-1889_iceseason',full.names=T)
+
+s = stack(ice)
+
+ice_mean = calc(s,fun=mean,filename='working/annualmean_1880-1889_iceseason/decadal_mean_1880-1889_ice.tif', overwrite=T)
+
+plot(ice_mean,col=cols,main='Decadal average of ice season 1880-1889')
+histogram(ice_mean)
+```
+
+
+```{r icefree decadal mean, message=F, warning=F}
+
+ice = list.files('working/annualmean_1880-1889_icefreeseason',full.names=T)
+
+s = stack(ice)
+
+ice_mean = calc(s,fun=mean,filename='working/annualmean_1880-1889_icefreeseason/decadal_mean_1880-1889_icefree.tif', overwrite=T)
+
+plot(ice_mean,col=cols,main='Decadal average of ice season 1880-1889')
+histogram(ice_mean)
+```
+
+
+

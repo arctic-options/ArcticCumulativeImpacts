@@ -1,0 +1,84 @@
+---
+title: "Create Seasonal UV Layers"
+author: "Jamie Afflerbach"
+date: "3/31/2016"
+output: html_document
+---
+
+
+```{r setup}
+ source('../../common.R')
+
+```
+
+
+Read in UV data
+```{r data}
+uv_ice = raster('working/uv/uv_baseline_anomaly_ice_season/uv_anomaly_difference_ice_season_raw.tif')
+
+uv_icef = raster('working/uv/uv_baseline_anomaly_icefree_season/uv_anomaly_difference_ice_free_season_raw.tif')
+```
+
+Reproject to mollweide
+```{r reproject}
+
+#define initial projection. Helps avoid errors when reprojecting to laea
+projection(uv_ice) <- "+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0"    
+
+uv_ice_laea <- projectRaster(uv_ice,crs=laeaCRS,progress='text',filename='working/uv_ice_season_anomaly_diff_laea.tif',overwrite=T)
+
+uv_icef_laea <-projectRaster(uv_icef,crs=laeaCRS,progress='text',filename='working/uv_ice_free_season_anomaly_diff_laea.tif',overwrite=T)
+```
+
+Set all negative values to 0
+
+```{r reclass}
+uv_ice_laea[uv_ice_laea<0]<-0
+uv_icef_laea[uv_icef_laea<0]<-0
+```
+
+Crop to bsr and pan boundaries then resample to 1km and mask 
+```{r crop}
+pan_uv_ice = crop(uv_ice_laea,pan)%>%
+              resample(.,pan_ocean,method='ngb')%>%
+                mask(.,pan,filename='working/uv_anomaly_diff_ice_season_1km_pan.tif',overwrite=T)
+pan_uv_icef = crop(uv_icef_laea,pan)%>%
+              resample(.,pan_ocean,method='ngb')%>%
+                mask(.,pan,filename='working/uv_anomaly_diff_ice_free_season_1km_pan.tif',overwrite=T)
+```
+
+```{r}
+histogram(pan_uv_ice)
+histogram(pan_uv_icef)
+```
+
+
+Get max across both seasons
+```{r 99}
+
+ref= cellStats(stack(pan_uv_ice,pan_uv_icef),stat='max')
+ref = max(ref)
+```
+
+Rescale
+```{r rescale}
+
+uv_ice_resc = calc(pan_uv_ice,fun=function(x){x/ref},filename='output/uv_anomaly_ice_season_1km_resc_pan.tif',overwrite=T)
+
+uv_icef_resc = calc(pan_uv_icef,fun=function(x){x/ref},filename='output/uv_anomaly_ice_free_season_1km_resc_pan.tif',overwrite=T)
+
+```
+
+Clip to BSR
+```{r clip}
+
+bsr_uv_ice = crop(uv_ice_resc,bsr)%>%mask(.,bsr_ocean,filename='output/bsr_uv_anomaly_diff_ice_season_1km_resc.tif',overwrite=T)
+writeRaster(bsr_uv_ice,filename='../seasonal_output/uv_ice_season.tif',overwrite=T)
+
+bsr_uv = crop(uv_icef_resc,bsr)%>%mask(.,bsr_ocean,filename='output/bsr_uv_anomaly_diff_ice_free_season_1km_resc.tif',overwrite=T)
+writeRaster(bsr_uv,filename='../seasonal_output/uv_ice_free_season.tif',overwrite=T)
+```
+
+
+
+

@@ -1,0 +1,13 @@
+Stressor,Path
+Demersal destructive commercial fishing,arctic-options/CumulativeImpacts/stressors/commercial_fisheries/output/dem_d_bsr_catch_prod(5yravg).tif
+Demersal non-destructive high bycatch commercial fishing,arctic-options/CumulativeImpacts/stressors/commercial_fisheries/output/dem_nd_hb_bsr_catch_prod(5yravg).tif
+Demersal non-destructive low bycatch commercial fishing,arctic-options/CumulativeImpacts/stressors/commercial_fisheries/output/dem_nd_lb_bsr_catch_prod(5yravg).tif
+Pelagic low bycatch commercial fishing,arctic-options/CumulativeImpacts/stressors/commercial_fisheries/output/pel_lb_bsr_catch_prod(5yravg).tif
+Fertilizer,arctic-options/CumulativeImpacts/stressors/land_based/output/fert_bsr_rescaled.tif
+Pesticide,arctic-options/CumulativeImpacts/stressors/land_based/output/pest_bsr_rescaled.tif
+Marine plastic pollution,arctic-options/CumulativeImpacts/stressors/marine_debris/output/weight_bsr.tif
+Ocean Acidification,arctic-options/CumulativeImpacts/stressors/ocean_acidification/output/bsr/oa_avg_2011-2014.tif
+Sea level rise,arctic-options/CumulativeImpacts/stressors/sealevel/output/bsr_slr_log_resc.tif
+Shipping,arctic-options/CumulativeImpacts/stressors/shipping/output/bsr_shipping_stressor_layer.tif
+Sea surface temperature,arctic-options/CumulativeImpacts/stressors/sst/output/bsr_sst_rescaled.tif
+UV,arctic-options/CumulativeImpacts/stressors/uv/output/bsr_uv_anomaly_diff_1km_resc.tif

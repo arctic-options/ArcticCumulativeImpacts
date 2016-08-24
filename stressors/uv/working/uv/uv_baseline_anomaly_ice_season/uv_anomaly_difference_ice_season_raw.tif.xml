@@ -1,0 +1,2 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<metadata xml:lang="en"><Esri><CreaDate>20151214</CreaDate><CreaTime>23403500</CreaTime><ArcGISFormat>1.0</ArcGISFormat><SyncOnce>TRUE</SyncOnce><DataProperties><lineage><Process ToolSource="c:\program files\arcgis\desktop10.3\ArcToolbox\Toolboxes\Data Management Tools.tbx\CalculateStatistics" Date="20151214" Time="234035">CalculateStatistics E:\\uv\\uv_baseline_anomaly_ice_season\uv_anomaly_difference_ice_season_raw.tif 1 1 # OVERWRITE "Feature Set"</Process></lineage></DataProperties></Esri></metadata>
